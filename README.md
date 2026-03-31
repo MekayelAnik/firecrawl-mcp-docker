@@ -1,15 +1,15 @@
 # Firecrawl MCP Server
-### Multi-Architecture Docker Image for Distributed Deployment
+### Multi-Architecture Docker Image for Web Scraping & Crawling
 
 <div align="left">
 
-<img alt="firecrawl-mcp" src="https://img.shields.io/badge/Firecrawl-MCP-FF6B6B?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDJMMiA3TDEyIDEyTDIyIDdMMTIgMloiIGZpbGw9IndoaXRlIi8+CjxwYXRoIGQ9Ik0yIDEyTDEyIDE3TDIyIDEyIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgo8cGF0aCBkPSJNMiAxN0wxMiAyMkwyMiAxNyIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4KPC9zdmc+&logoColor=white" width="400">
+<img alt="firecrawl-mcp" src="https://img.shields.io/badge/Firecrawl-MCP-00E9A3?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDJMMiA3TDEyIDEyTDIyIDdMMTIgMloiIGZpbGw9IndoaXRlIi8+CjxwYXRoIGQ9Ik0yIDEyTDEyIDE3TDIyIDEyIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgo8cGF0aCBkPSJNMiAxN0wxMiAyMkwyMiAxNyIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4KPC9zdmc+&logoColor=white" width="400">
 
 [![Docker Pulls](https://img.shields.io/docker/pulls/mekayelanik/firecrawl-mcp.svg?style=flat-square)](https://hub.docker.com/r/mekayelanik/firecrawl-mcp)
 [![Docker Stars](https://img.shields.io/docker/stars/mekayelanik/firecrawl-mcp.svg?style=flat-square)](https://hub.docker.com/r/mekayelanik/firecrawl-mcp)
 [![License](https://img.shields.io/badge/license-GPL-blue.svg?style=flat-square)](https://raw.githubusercontent.com/MekayelAnik/firecrawl-mcp-docker/refs/heads/main/LICENSE)
 
-**[Official Website](https://www.firecrawl.dev/)** • **[Documentation](https://github.com/mendableai/firecrawl)** • **[Docker Hub](https://hub.docker.com/r/mekayelanik/firecrawl-mcp)**
+**[Official Website](https://firecrawl.dev/)** • **[Documentation](https://github.com/nicholasgriffintn/firecrawl-mcp)** • **[Docker Hub](https://hub.docker.com/r/mekayelanik/firecrawl-mcp)**
 
 </div>
 
@@ -24,29 +24,35 @@
 - [Configuration](#configuration)
 - [MCP Client Configuration](#mcp-client-configuration)
 - [Network Configuration](#network-configuration)
-- [Firecrawl Tools](#firecrawl-tools)
 - [Updating](#updating)
 - [Troubleshooting](#troubleshooting)
 - [Additional Resources](#additional-resources)
 - [Support & License](#support--license)
+- [Major Changes](#major-changes)
 
 ---
 
+## 😎 Buy Me a Coffee ☕︎
+**Your support encourages me to keep creating/supporting my open-source projects.** If you found value in this project, you can buy me a coffee to keep me inspired.
+
+<p align="center">
+<a href="https://07mekayel07.gumroad.com/coffee" target="_blank">
+<img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" width="217" height="60">
+</a>
+</p>
+
 ## Overview
 
-Firecrawl MCP Server is a powerful web scraping and content extraction Model Context Protocol server with enterprise-grade features. Built on Alpine Linux for a minimal footprint and maximum security, it provides comprehensive web data extraction capabilities. This can be used with AI IDEs (VS Code, Claude CLI, Codex, Cursor, etc.), AI clients (Ollama, LM Studio, VLLM, etc.), or directly in RAG applications.
+Firecrawl MCP Server provides web scraping and crawling capabilities through the Model Context Protocol via the Firecrawl API. Built on Alpine Linux for minimal footprint and maximum security.
 
 ### Key Features
 
 ✨ **Multi-Architecture Support** - Native support for x86-64 and ARM64  
 🚀 **Multiple Transport Protocols** - HTTP, SSE, and WebSocket support  
-🔥 **Advanced Web Scraping** - Single page, batch, crawl, and search capabilities  
-🎯 **Structured Data Extraction** - LLM-powered content extraction with schemas  
-🔄 **Automatic Retries** - Exponential backoff with configurable retry logic  
-📊 **Credit Monitoring** - Built-in usage tracking and alerts  
 🔒 **Secure by Design** - Alpine-based with minimal attack surface  
-⚡ **High Performance** - Parallel processing and rate limiting  
-🛡️ **Production Ready** - Stable releases with comprehensive testing
+⚡ **High Performance** - ZSTD compression for faster deployments  
+🎯 **Production Ready** - Stable releases with comprehensive testing  
+🔧 **Easy Configuration** - Simple environment variable setup
 
 ---
 
@@ -67,7 +73,7 @@ Firecrawl MCP Server is a powerful web scraping and content extraction Model Con
 |:----|:---------:|:------------|:---------|
 | `stable` | ⭐⭐⭐ | Most stable release | **Recommended for production** |
 | `latest` | ⭐⭐⭐ | Latest stable release | Stay current with stable features |
-| `3.0.x` | ⭐⭐⭐ | Specific version | Version pinning for consistency |
+| `1.0.21` | ⭐⭐⭐ | Specific version | Version pinning for consistency |
 | `beta` | ⚠️ | Beta releases | **Testing only** |
 
 ### System Requirements
@@ -75,21 +81,12 @@ Firecrawl MCP Server is a powerful web scraping and content extraction Model Con
 - **Docker Engine:** 23.0+
 - **RAM:** Minimum 512MB
 - **CPU:** Single core sufficient
-- **Firecrawl API Key:** Required (obtain from [firecrawl.dev](https://www.firecrawl.dev/app/api-keys))
 
-> 🔐 **CRITICAL:** Do NOT expose this container directly to the internet without proper security measures (reverse proxy, SSL/TLS, authentication, firewall rules).
+> 🔒 **CRITICAL:** Do NOT expose this container directly to the internet without proper security measures (reverse proxy, SSL/TLS, authentication, firewall rules).
 
 ---
 
 ## Quick Start
-
-### Obtaining API Key
-
-**Required:** You must have a Firecrawl API key to use this server.
-
-1. Visit [https://www.firecrawl.dev/app/api-keys](https://www.firecrawl.dev/app/api-keys)
-2. Create an account if you don't have one
-3. Generate a new API key (starts with `fc-`)
 
 ### Docker Compose (Recommended)
 
@@ -100,31 +97,19 @@ services:
     container_name: firecrawl-mcp
     restart: unless-stopped
     ports:
-      - "8030:8030"
+      - "8016:8016"
     environment:
-      # REQUIRED: Your Firecrawl API key
-      - FIRECRAWL_API_KEY=fc-your-api-key-here
-      
-      # Basic Configuration
-      - PORT=8030
+      - PORT=8016
+      - INTERNAL_PORT=38011
       - PUID=1000
       - PGID=1000
       - TZ=Asia/Dhaka
       - NODE_ENV=production
-      - PROTOCOL=SHTTP
-      
-      # Optional: Self-hosted instance
-      # - FIRECRAWL_API_URL=https://firecrawl.your-domain.com
-      
-      # Optional: Retry Configuration (defaults shown)
-      # - FIRECRAWL_RETRY_MAX_ATTEMPTS=3
-      # - FIRECRAWL_RETRY_INITIAL_DELAY=1000
-      # - FIRECRAWL_RETRY_MAX_DELAY=10000
-      # - FIRECRAWL_RETRY_BACKOFF_FACTOR=2
-      
-      # Optional: Credit Monitoring (defaults shown)
-      # - FIRECRAWL_CREDIT_WARNING_THRESHOLD=1000
-      # - FIRECRAWL_CREDIT_CRITICAL_THRESHOLD=100
+      - PROTOCOL=HTTP
+      - ENABLE_HTTPS=false
+      - HTTP_VERSION_MODE=auto
+      # Optional: require Bearer token auth at HAProxy layer
+      # - API_KEY=replace-with-strong-secret
     hostname: firecrawl-mcp
     domainname: local
 ```
@@ -141,14 +126,16 @@ docker compose logs -f firecrawl-mcp
 docker run -d \
   --name=firecrawl-mcp \
   --restart=unless-stopped \
-  -p 8030:8030 \
-  -e FIRECRAWL_API_KEY=fc-your-api-key-here \
-  -e PORT=8030 \
+  -p 8016:8016 \
+  -e PORT=8016 \
+  -e INTERNAL_PORT=38011 \
   -e PUID=1000 \
   -e PGID=1000 \
   -e TZ=Asia/Dhaka \
   -e NODE_ENV=production \
-  -e PROTOCOL=SHTTP \
+  -e PROTOCOL=HTTP \
+  -e ENABLE_HTTPS=false \
+  -e HTTP_VERSION_MODE=auto \
   mekayelanik/firecrawl-mcp:stable
 ```
 
@@ -156,10 +143,20 @@ docker run -d \
 
 | Protocol | Endpoint | Use Case |
 |:---------|:---------|:---------|
-| **HTTP** | `http://host-ip:8030/mcp` | Best compatibility (recommended) |
-| **SSE** | `http://host-ip:8030/sse` | Real-time streaming |
-| **WebSocket** | `ws://host-ip:8030/message` | Bidirectional communication |
+| **HTTP** | `http://host-ip:8016/mcp` | Best compatibility (recommended) |
+| **SSE** | `http://host-ip:8016/sse` | Real-time streaming |
+| **WebSocket** | `ws://host-ip:8016/message` | Bidirectional communication |
 
+When HTTPS is enabled (`ENABLE_HTTPS=true`), use TLS endpoints:
+
+| Protocol | Endpoint |
+|:---------|:---------|
+| **SHTTP** | `https://host-ip:8016/mcp` |
+| **SSE** | `https://host-ip:8016/sse` |
+| **WebSocket** | `wss://host-ip:8016/message` |
+
+> ⚠️ **Security Warning:** The container now defaults to HTTP (`ENABLE_HTTPS=false`) for easier local setup. Use `ENABLE_HTTPS=true` for production, public networks, or any untrusted environment.
+>
 > ⏱️ **ARM Devices:** Allow 30-60 seconds for initialization before accessing endpoints.
 
 ---
@@ -168,74 +165,56 @@ docker run -d \
 
 ### Environment Variables
 
-#### Required Configuration
-
-| Variable | Required | Description |
-|:---------|:--------:|:------------|
-| `FIRECRAWL_API_KEY` | **YES** | Your Firecrawl API key (starts with `fc-`) |
-
-#### Basic Configuration
-
-| Variable | Default | Description | OPTIONS |
-|:---------|:-------:|:------------|:-------|
-| `PORT` | `8030` | Internal server port | Any Valid Port |
-| `PUID` | `1000` | User ID for file permissions | Any valid UNIX user's UID |
-| `PGID` | `1000` | Group ID for file permissions | Any valid UNIX Group's GID |
-| `TZ` | `Asia/Dhaka` | Any valid UNIX Timezone | UNIX timezones ([TZ database](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones)) |
-| `NODE_ENV` | `production` | Node.js environment | `production` or `test` or `development` |
-| `PROTOCOL` | `SHTTP` | Default transport protocol |`SHTTP` (For Streamable HTTP transport) or `SSE` (For Server-Sent Events (SSE) transport) or `WS` (For WebSocket (WS) transport)  |
-
-#### Optional: Self-Hosted Configuration
-
 | Variable | Default | Description |
 |:---------|:-------:|:------------|
-| `FIRECRAWL_API_URL` | Cloud API | Custom API endpoint for self-hosted instances |
+| `PORT` | `8016` | Internal server port |
+| `INTERNAL_PORT` | `38011` | Internal MCP server port used by supergateway |
+| `PUID` | `1000` | User ID for file permissions |
+| `PGID` | `1000` | Group ID for file permissions |
+| `TZ` | `Asia/Dhaka` | Container timezone ([TZ database](https://en.wikipedia.org/wiki/List_of_tz_database_time_zones)) |
+| `NODE_ENV` | `production` | Node.js environment |
+| `PROTOCOL` | `SHTTP` | Default transport protocol |
+| `API_KEY` | *(empty)* | Enables Bearer token auth (`Authorization: Bearer <API_KEY>`) |
+| `CORS` | *(empty)* | Comma-separated CORS origins, supports `*` |
+| `ENABLE_HTTPS` | `false` | Enables TLS termination in HAProxy |
+| `TLS_CERT_PATH` | `/etc/haproxy/certs/server.crt` | TLS cert path |
+| `TLS_KEY_PATH` | `/etc/haproxy/certs/server.key` | TLS private key path |
+| `TLS_PEM_PATH` | `/etc/haproxy/certs/server.pem` | Combined PEM file used by HAProxy |
+| `TLS_CN` | `localhost` | CN for auto-generated certificate |
+| `TLS_SAN` | `DNS:<TLS_CN>` | SAN for auto-generated certificate |
+| `TLS_DAYS` | `365` | Auto-generated cert validity period |
+| `TLS_MIN_VERSION` | `TLSv1.3` | Minimum TLS protocol (`TLSv1.2` or `TLSv1.3`) |
+| `HTTP_VERSION_MODE` | `auto` | `auto`, `all`, `h1`, `h2`, `h3`, `h1+h2` |
+| `DEBUG_MODE` | *(empty)* | Enables debug hold mode when set truthy |
 
-#### Optional: Retry Configuration
+### HTTPS and HTTP Version Notes
 
-| Variable | Default | Description |
-|:---------|:-------:|:------------|
-| `FIRECRAWL_RETRY_MAX_ATTEMPTS` | `3` | Maximum number of retry attempts |
-| `FIRECRAWL_RETRY_INITIAL_DELAY` | `1000` | Initial delay before first retry (ms) |
-| `FIRECRAWL_RETRY_MAX_DELAY` | `10000` | Maximum delay between retries (ms) |
-| `FIRECRAWL_RETRY_BACKOFF_FACTOR` | `2` | Exponential backoff multiplier |
+- If `ENABLE_HTTPS=true` and cert files are missing, the container auto-generates a self-signed certificate.
+- If `TLS_CERT_PATH` and `TLS_KEY_PATH` exist, they are merged into `TLS_PEM_PATH` and used directly.
+- `HTTP_VERSION_MODE=h3` (or `auto`) enables HTTP/3 only when HAProxy build includes QUIC; otherwise it safely falls back.
 
-#### Optional: Credit Monitoring
+### API Key Authentication Notes
 
-| Variable | Default | Description |
-|:---------|:-------:|:------------|
-| `FIRECRAWL_CREDIT_WARNING_THRESHOLD` | `1000` | Warn when credits reach this level |
-| `FIRECRAWL_CREDIT_CRITICAL_THRESHOLD` | `100` | Critical alert at this credit level |
+- Set `API_KEY` to enforce authentication at reverse proxy level.
+- Expected header format: `Authorization: Bearer <API_KEY>`.
+- Localhost health checks remain accessible for liveness/readiness.
 
-### Advanced Configuration Examples
+### User & Group IDs
 
-#### Cloud API with Custom Retry Logic
+Find your IDs and set them to avoid permission issues:
 
-```yaml
-environment:
-  - FIRECRAWL_API_KEY=fc-your-api-key-here
-  - FIRECRAWL_RETRY_MAX_ATTEMPTS=5
-  - FIRECRAWL_RETRY_INITIAL_DELAY=2000
-  - FIRECRAWL_RETRY_MAX_DELAY=30000
-  - FIRECRAWL_RETRY_BACKOFF_FACTOR=3
+```bash
+id username
+# uid=1000(user) gid=1000(group)
 ```
 
-#### Self-Hosted Instance
+### Timezone Examples
 
 ```yaml
-environment:
-  - FIRECRAWL_API_KEY=your-instance-key
-  - FIRECRAWL_API_URL=https://firecrawl.your-domain.com
-  - FIRECRAWL_RETRY_MAX_ATTEMPTS=10
-```
-
-#### Production with Aggressive Monitoring
-
-```yaml
-environment:
-  - FIRECRAWL_API_KEY=fc-your-api-key-here
-  - FIRECRAWL_CREDIT_WARNING_THRESHOLD=2000
-  - FIRECRAWL_CREDIT_CRITICAL_THRESHOLD=500
+- TZ=Asia/Dhaka        # Bangladesh
+- TZ=America/New_York  # US Eastern
+- TZ=Europe/London     # UK
+- TZ=UTC               # Universal Time
 ```
 
 ---
@@ -248,10 +227,12 @@ environment:
 |:-------|:----:|:---:|:---------:|:------------|
 | **VS Code (Cline/Roo-Cline)** | ✅ | ✅ | ❌ | HTTP |
 | **Claude Desktop** | ✅ | ✅ | ⚠️* | HTTP |
+| **Claude CLI** | ✅ | ✅ | ⚠️* | HTTP |
+| **Codex CLI** | ✅ | ✅ | ⚠️* | HTTP |
+| **Codeium (Windsurf)** | ✅ | ✅ | ⚠️* | HTTP |
 | **Cursor** | ✅ | ✅ | ⚠️* | HTTP |
-| **Windsurf (Codeium)** | ✅ | ✅ | ⚠️* | HTTP |
 
-> ⚠️ *WebSocket is experimental
+> ⚠️ *WebSocket is experimental ([Issue #1288](https://github.com/modelcontextprotocol/modelcontextprotocol/issues/1288))
 
 ---
 
@@ -263,7 +244,7 @@ Configure in `.vscode/settings.json`:
 {
   "mcp.servers": {
     "firecrawl": {
-      "url": "http://host-ip:8030/mcp",
+      "url": "http://host-ip:8016/mcp",
       "transport": "http"
     }
   }
@@ -272,20 +253,47 @@ Configure in `.vscode/settings.json`:
 
 ---
 
-### Claude Desktop App
-
-**Config Locations:**
-- **Linux:** `~/.config/Claude/claude_desktop_config.json`
-- **macOS:** `~/Library/Application Support/Claude/claude_desktop_config.json`
-- **Windows:** `%APPDATA%\Claude\claude_desktop_config.json`
+### Claude Desktop App/Claude Code
 
 **Configuration:**
+### **With API_KEY**
+```
+claude mcp add-json github '{"type":"http","url":"http://localhost:8045/mcp","headers":{"Authorization":"Bearer <YOUR_API_KEY>"}}'
+```
+### **Without API_KEY**
+```
+claude mcp add-json github '{"type":"http","url":"http://localhost:8045/mcp"}'
+```
+
+---
+
+### Codex CLI
+
+Configure in `~/.codex/config.json`:
+
 ```json
 {
   "mcpServers": {
     "firecrawl": {
       "transport": "http",
-      "url": "http://localhost:8030/mcp"
+      "url": "http://host-ip:8016/mcp"
+    }
+  }
+}
+```
+
+---
+
+### Codeium (Windsurf)
+
+Configure in `.codeium/mcp_settings.json`:
+
+```json
+{
+  "mcpServers": {
+    "firecrawl": {
+      "transport": "http",
+      "url": "http://host-ip:8016/mcp"
     }
   }
 }
@@ -302,7 +310,7 @@ Configure in `~/.cursor/mcp.json`:
   "mcpServers": {
     "firecrawl": {
       "transport": "http",
-      "url": "http://host-ip:8030/mcp"
+      "url": "http://host-ip:8016/mcp"
     }
   }
 }
@@ -310,40 +318,13 @@ Configure in `~/.cursor/mcp.json`:
 
 ---
 
-### Windsurf (Codeium)
+### Testing Configuration
 
-Configure in `.codeium/mcp_settings.json`:
+Verify with [MCP Inspector](https://github.com/modelcontextprotocol/inspector):
 
-```json
-{
-  "mcpServers": {
-    "firecrawl": {
-      "transport": "http",
-      "url": "http://host-ip:8030/mcp"
-    }
-  }
-}
-```
-
----
-
-### Auto-Approve Tool List
-
-To enable auto-approval in your MCP client, add these tools:
-
-```json
-{
-  "autoApprove": [
-    "firecrawl_scrape",
-    "firecrawl_batch_scrape",
-    "firecrawl_check_batch_status",
-    "firecrawl_map",
-    "firecrawl_search",
-    "firecrawl_crawl",
-    "firecrawl_check_crawl_status",
-    "firecrawl_extract"
-  ]
-}
+```bash
+npm install -g @modelcontextprotocol/inspector
+mcp-inspector http://host-ip:8016/mcp
 ```
 
 ---
@@ -367,10 +348,11 @@ services:
   firecrawl-mcp:
     image: mekayelanik/firecrawl-mcp:stable
     ports:
-      - "8030:8030"
+      - "8016:8016"
 ```
 
-**Access:** `http://localhost:8030/mcp`
+**Benefits:** Container isolation, easy setup, works everywhere
+**Access:** `http://localhost:8016/mcp`
 
 ---
 
@@ -383,7 +365,9 @@ services:
     network_mode: host
 ```
 
-**Access:** `http://localhost:8030/mcp`
+**Benefits:** Maximum performance, no NAT overhead, no port mapping needed
+**Considerations:** Linux only, shares host network namespace
+**Access:** `http://localhost:8016/mcp`
 
 ---
 
@@ -393,6 +377,7 @@ services:
 services:
   firecrawl-mcp:
     image: mekayelanik/firecrawl-mcp:stable
+    mac_address: "AB:BC:CD:DE:EF:01"
     networks:
       macvlan-net:
         ipv4_address: 192.168.1.100
@@ -405,75 +390,12 @@ networks:
     ipam:
       config:
         - subnet: 192.168.1.0/24
+          gateway: 192.168.1.1
 ```
 
-**Access:** `http://192.168.1.100:8030/mcp`
-
----
-
-## Firecrawl Tools
-
-### Tool Selection Guide
-
-| Scenario | Recommended Tool |
-|:---------|:----------------|
-| Single known URL | `firecrawl_scrape` |
-| Multiple known URLs | `firecrawl_batch_scrape` |
-| Discover site URLs | `firecrawl_map` |
-| Search the web | `firecrawl_search` |
-| Extract structured data | `firecrawl_extract` |
-| Full site analysis | `firecrawl_crawl` (with limits) |
-
-### Available Tools
-
-#### 1. Scrape (`firecrawl_scrape`)
-Extract content from a single URL with advanced options.
-
-**Best for:** Single page content extraction  
-**Example:** "Get the content from https://example.com"
-
-#### 2. Batch Scrape (`firecrawl_batch_scrape`)
-Scrape multiple URLs efficiently with parallel processing.
-
-**Best for:** Multiple known pages  
-**Example:** "Get content from these 5 blog posts"
-
-#### 3. Map (`firecrawl_map`)
-Discover all indexed URLs on a website.
-
-**Best for:** URL discovery before scraping  
-**Example:** "List all URLs on example.com"
-
-#### 4. Search (`firecrawl_search`)
-Search the web and extract content from results.
-
-**Best for:** Finding information across websites  
-**Example:** "Find recent AI research papers"
-
-#### 5. Crawl (`firecrawl_crawl`)
-Asynchronous crawl job for comprehensive site extraction.
-
-**Best for:** Multi-page comprehensive extraction  
-**Warning:** Can be large - use limits to avoid token overflow
-
-#### 6. Extract (`firecrawl_extract`)
-LLM-powered structured data extraction with schemas.
-
-**Best for:** Structured data like prices, names, specs  
-**Example:** "Extract product details from these pages"
-
-#### 7. Check Batch Status (`firecrawl_check_batch_status`)
-Monitor batch operation progress.
-
-#### 8. Check Crawl Status (`firecrawl_check_crawl_status`)
-Monitor crawl job progress.
-
-### Rate Limiting & Performance
-
-- Automatic rate limit handling with exponential backoff
-- Efficient parallel processing for batch operations
-- Smart request queuing and throttling
-- Configurable retry logic with monitoring
+**Benefits:** Dedicated IP, direct LAN access
+**Considerations:** Linux only, requires additional setup
+**Access:** `http://192.168.1.100:8016/mcp`
 
 ---
 
@@ -496,7 +418,7 @@ docker stop firecrawl-mcp && docker rm firecrawl-mcp
 docker image prune -f
 ```
 
-### Watchtower (One-Time)
+### One-Time Update with Watchtower
 
 ```bash
 docker run --rm \
@@ -513,28 +435,24 @@ docker run --rm \
 ### Pre-Flight Checklist
 
 - ✅ Docker Engine 23.0+
-- ✅ Valid Firecrawl API key
-- ✅ Port 8030 available
-- ✅ Sufficient startup time
+- ✅ Port 8016 available
+- ✅ Sufficient startup time (ARM devices)
 - ✅ Latest stable image
+- ✅ Correct configuration
 
 ### Common Issues
 
-#### Container Won't Start - Missing API Key
+#### Container Won't Start
 
 ```bash
-# Check logs for API key error
+# Check Docker version
+docker --version
+
+# Verify port availability
+sudo netstat -tulpn | grep 8016
+
+# Check logs
 docker logs firecrawl-mcp
-
-# Error message: "FIRECRAWL_API_KEY environment variable is REQUIRED"
-# Solution: Add your API key to the environment variables
-```
-
-#### Invalid API Key Format
-
-```bash
-# Warning: "API key doesn't match expected format"
-# Solution: Ensure your key starts with 'fc-'
 ```
 
 #### Permission Errors
@@ -552,8 +470,10 @@ sudo chown -R 1000:1000 /path/to/volume
 
 ```bash
 # Test connectivity
-curl http://localhost:8030/mcp
-curl http://host-ip:8030/mcp
+curl http://localhost:8016/mcp
+curl http://host-ip:8016/mcp
+curl -k https://localhost:8016/mcp
+curl -k https://host-ip:8016/mcp
 
 # Check firewall
 sudo ufw status
@@ -562,34 +482,12 @@ sudo ufw status
 docker inspect firecrawl-mcp | grep IPAddress
 ```
 
-#### Rate Limiting Issues
+#### Slow ARM Performance
 
-Check logs for rate limit messages and adjust retry configuration:
-
-```yaml
-environment:
-  - FIRECRAWL_RETRY_MAX_ATTEMPTS=5
-  - FIRECRAWL_RETRY_MAX_DELAY=30000
-```
-
-#### Credit Usage Warnings
-
-Monitor logs for credit alerts and adjust thresholds:
-
-```yaml
-environment:
-  - FIRECRAWL_CREDIT_WARNING_THRESHOLD=2000
-  - FIRECRAWL_CREDIT_CRITICAL_THRESHOLD=500
-```
-
-### Debug Mode
-
-Enable verbose logging:
-
-```yaml
-environment:
-  - DEBUG_MODE=verbose
-```
+- Wait 30-60 seconds after start
+- Monitor: `docker logs -f firecrawl-mcp`
+- Check resources: `docker stats firecrawl-mcp`
+- Use faster storage (SSD vs SD card)
 
 ### Debug Information
 
@@ -611,13 +509,8 @@ docker inspect firecrawl-mcp > inspect.json
 ## Additional Resources
 
 ### Documentation
-- 📚 [Firecrawl Official Docs](https://docs.firecrawl.dev)
-- 🔥 [Firecrawl GitHub](https://github.com/mendableai/firecrawl)
+- 📚 [Firecrawl Official Docs](https://github.com/nicholasgriffintn/firecrawl-mcp)
 - 📦 [NPM Package](https://www.npmjs.com/package/firecrawl-mcp)
-- 🎮 [MCP Playground](https://mcp.so/playground?server=firecrawl-mcp-server)
-
-### MCP Resources
-- 📖 [MCP Documentation](https://modelcontextprotocol.io)
 - 🔧 [MCP Inspector](https://github.com/modelcontextprotocol/inspector)
 
 ### Docker Resources
@@ -625,25 +518,31 @@ docker inspect firecrawl-mcp > inspect.json
 - 🌐 [Docker Networking](https://docs.docker.com/network/)
 - 🛡️ [Docker Security](https://docs.docker.com/engine/security/)
 
+### Monitoring
+- 📊 [Diun - Update Notifier](https://crazymax.dev/diun/)
+- ⚡ [Watchtower](https://containrrr.dev/watchtower/)
+
 ---
+
+## 😎 Buy Me a Coffee ☕︎
+**Your support encourages me to keep creating/supporting my open-source projects.** If you found value in this project, you can buy me a coffee to keep me inspired.
+
+<p align="center">
+  <a href="https://07mekayel07.gumroad.com/coffee" target="_blank">
+    <img src="https://cdn.buymeacoffee.com/buttons/v2/default-yellow.png" alt="Buy Me A Coffee" width="217" height="60">
+  </a>
+</p>
 
 ## Support & License
 
 ### Getting Help
 
 **Docker Image Issues:**
-- GitHub: [firecrawl-mcp-docker/issues](https://github.com/MekayelAnik/firecrawl-mcp-docker/issues)
+- GitHub: [firecrawl-mcp-docker/issues](https://github.com/MekayelAnik/firecrawl-mcp/issues)
 
 **Firecrawl MCP Issues:**
-- GitHub: [firecrawl/issues](https://github.com/mendableai/firecrawl/issues)
-- Website: [firecrawl.dev](https://www.firecrawl.dev/)
-- Discord: [Join Community](https://discord.gg/firecrawl)
-
-### API Key Support
-
-For API key issues, billing, or account questions:
-- Visit: [Firecrawl Dashboard](https://www.firecrawl.dev/app)
-- Email: support@firecrawl.dev
+- GitHub: [nicholasgriffintn/firecrawl-mcp/issues](https://github.com/nicholasgriffintn/firecrawl-mcp/issues)
+- Website: [firecrawl.dev](https://firecrawl.dev/)
 
 ### Contributing
 
@@ -657,22 +556,20 @@ We welcome contributions:
 
 GPL License. See [LICENSE](https://raw.githubusercontent.com/MekayelAnik/firecrawl-mcp-docker/refs/heads/main/LICENSE) for details.
 
-Firecrawl MCP server has its own license - see [official repo](https://github.com/mendableai/firecrawl).
+Firecrawl MCP server has its own license - see [Main NPM repo](https://github.com/nicholasgriffintn/firecrawl-mcp).
 
 ---
 
-## Disclaimer
+### Major Changes
 
-This is an unofficial Docker image for Firecrawl MCP Server. This publisher is NOT affiliated with Firecrawl or Anthropic.
+<ul>
+  <li><strong>Initial Release:</strong> Full CI/CD pipeline with HAProxy, HTTPS/TLS, QUIC/HTTP3, API key auth</li>
+</ul>
 
-**Web Scraping Notice:** This tool performs web scraping on public search results. Users are responsible for complying with website terms of service, robots.txt directives, rate limiting, ethical scraping practices, and local laws.
-
-**Privacy:** This Docker image DOES NOT collect, store, or transmit your scraping, search queries, or personal data. All searches are performed directly against the Cloud or Local Firecrawl Server using the API.
-
----
+<p></p>
 
 <div align="center">
 
-[⬆️ Back to Top](#firecrawl-mcp-server)
+[⬆ Back to Top](#firecrawl-mcp-server)
 
 </div>
