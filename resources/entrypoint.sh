@@ -1,23 +1,23 @@
-#!/bin/bash
-set -e
-/usr/local/bin/banner.sh
+#!/usr/bin/env bash
+set -euo pipefail
 
-# Default values
 readonly DEFAULT_PUID=1000
 readonly DEFAULT_PGID=1000
 readonly DEFAULT_PORT=8016
+readonly DEFAULT_INTERNAL_PORT=38011
 readonly DEFAULT_PROTOCOL="SHTTP"
+readonly DEFAULT_TLS_DAYS=365
+readonly DEFAULT_TLS_CN="localhost"
+readonly DEFAULT_TLS_MIN_VERSION="TLSv1.3"
+readonly DEFAULT_HTTP_VERSION_MODE="auto"
+readonly SAFE_API_KEY_REGEX='^[[:graph:]]+$'
+readonly MIN_API_KEY_LEN=5
+readonly MAX_API_KEY_LEN=256
 readonly FIRST_RUN_FILE="/tmp/first_run_complete"
+readonly HAPROXY_SERVER_NAME="firecrawl"
+readonly HAPROXY_TEMPLATE="/etc/haproxy/haproxy.cfg.template"
+readonly HAPROXY_CONFIG="/tmp/haproxy.cfg"
 
-# Firecrawl default configuration values
-readonly DEFAULT_RETRY_MAX_ATTEMPTS=3
-readonly DEFAULT_RETRY_INITIAL_DELAY=1000
-readonly DEFAULT_RETRY_MAX_DELAY=10000
-readonly DEFAULT_RETRY_BACKOFF_FACTOR=2
-readonly DEFAULT_CREDIT_WARNING_THRESHOLD=1000
-readonly DEFAULT_CREDIT_CRITICAL_THRESHOLD=100
-
-# Function to trim whitespace using parameter expansion
 trim() {
     local var="$*"
     var="${var#"${var%%[![:space:]]*}"}"
@@ -25,77 +25,176 @@ trim() {
     printf '%s' "$var"
 }
 
-# Validate positive integers
 is_positive_int() {
     [[ "$1" =~ ^[0-9]+$ ]] && [ "$1" -gt 0 ]
 }
 
-# Validate floating point numbers (for backoff factor)
-is_positive_float() {
-    [[ "$1" =~ ^[0-9]+(\.[0-9]+)?$ ]] && [ "$(echo "$1 > 0" | bc -l 2>/dev/null || echo 1)" -eq 1 ]
+is_true() {
+    case "$(printf '%s' "$1" | tr '[:upper:]' '[:lower:]')" in
+        1|true|yes|on) return 0 ;;
+        *) return 1 ;;
+    esac
 }
 
-# Validate directory path
-validate_directory() {
-    local dir="$1"
-    [[ -n "$dir" ]] && [[ "$dir" =~ ^/ ]] && [[ ! "$dir" =~ \.\. ]] && [[ "${#dir}" -le 255 ]]
+validate_port() {
+    local name="$1"
+    local value="$2"
+    local fallback="$3"
+
+    if ! is_positive_int "$value" || [ "$value" -lt 1 ] || [ "$value" -gt 65535 ]; then
+        echo "Invalid ${name}='${value}', using default ${fallback}" >&2
+        printf '%s' "$fallback"
+        return
+    fi
+
+    printf '%s' "$value"
 }
 
-# First run handling
+validate_tls_days() {
+    local value="$1"
+    local fallback="$2"
+
+    if ! is_positive_int "$value"; then
+        echo "Invalid TLS_DAYS='${value}', using default ${fallback}" >&2
+        printf '%s' "$fallback"
+        return
+    fi
+
+    printf '%s' "$value"
+}
+
+validate_tls_min_version() {
+    local value="$1"
+    local fallback="$2"
+
+    case "$value" in
+        TLSv1.2|TLSv1.3)
+            printf '%s' "$value"
+            ;;
+        *)
+            echo "Invalid TLS_MIN_VERSION='${value}', using default ${fallback}" >&2
+            printf '%s' "$fallback"
+            ;;
+    esac
+}
+
+normalize_http_version_mode() {
+    local raw="$1"
+    local mode
+
+    mode="$(printf '%s' "$raw" | tr '[:upper:]' '[:lower:]')"
+    mode="$(trim "$mode")"
+
+    case "$mode" in
+        auto|all|h1|h2|h3|h1+h2)
+            printf '%s' "$mode"
+            ;;
+        http/1.1|http1|http1.1)
+            printf 'h1'
+            ;;
+        http/2|http2)
+            printf 'h2'
+            ;;
+        http/3|http3)
+            printf 'h3'
+            ;;
+        *)
+            echo "Invalid HTTP_VERSION_MODE='${raw}', using default ${DEFAULT_HTTP_VERSION_MODE}" >&2
+            printf '%s' "$DEFAULT_HTTP_VERSION_MODE"
+            ;;
+    esac
+}
+
+validate_api_key() {
+    API_KEY="${API_KEY:-}"
+    API_KEY="$(trim "$API_KEY")"
+    local api_key_len=0
+
+    if [[ -z "$API_KEY" ]]; then
+        export API_KEY=""
+        return
+    fi
+
+    api_key_len="${#API_KEY}"
+    if (( api_key_len < MIN_API_KEY_LEN || api_key_len > MAX_API_KEY_LEN )); then
+        echo "Invalid API_KEY length (${api_key_len}). Expected ${MIN_API_KEY_LEN}-${MAX_API_KEY_LEN} characters." >&2
+        exit 1
+    fi
+
+    if [[ ! "$API_KEY" =~ $SAFE_API_KEY_REGEX ]]; then
+        echo "Invalid API_KEY format. Refusing to start with malformed API key (whitespace/control chars are not allowed)." >&2
+        exit 1
+    fi
+
+    export API_KEY
+}
+
+validate_cors() {
+    ALLOW_ALL_CORS=false
+    HAPROXY_CORS_ENABLED=false
+    HAPROXY_CORS_ORIGINS=()
+
+    local cors_value
+    if [[ -z "${CORS:-}" ]]; then
+        return
+    fi
+
+    HAPROXY_CORS_ENABLED=true
+    IFS=',' read -ra CORS_VALUES <<< "$CORS"
+    for cors_value in "${CORS_VALUES[@]}"; do
+        cors_value="$(trim "$cors_value")"
+        [[ -z "$cors_value" ]] && continue
+
+        if [[ "$cors_value" =~ ^(all|\*)$ ]]; then
+            ALLOW_ALL_CORS=true
+            HAPROXY_CORS_ORIGINS=("*")
+            break
+        elif [[ "$cors_value" =~ ^https?:// ]]; then
+            HAPROXY_CORS_ORIGINS+=("$cors_value")
+        elif [[ "$cors_value" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(:[0-9]+)?$ ]]; then
+            HAPROXY_CORS_ORIGINS+=("http://$cors_value" "https://$cors_value")
+        elif [[ "$cors_value" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(:[0-9]+)?$ ]]; then
+            HAPROXY_CORS_ORIGINS+=("http://$cors_value" "https://$cors_value")
+        else
+            echo "Warning: Invalid CORS pattern '$cors_value' - skipping"
+        fi
+    done
+}
+
 handle_first_run() {
     local uid_gid_changed=0
 
-    # Handle PUID/PGID logic
-    if [[ -z "$PUID" && -z "$PGID" ]]; then
+    if [[ -z "${PUID:-}" && -z "${PGID:-}" ]]; then
         PUID="$DEFAULT_PUID"
         PGID="$DEFAULT_PGID"
-        echo "PUID and PGID not set. Using defaults: PUID=$PUID, PGID=$PGID"
-    elif [[ -n "$PUID" && -z "$PGID" ]]; then
+    elif [[ -n "${PUID:-}" && -z "${PGID:-}" ]]; then
         if is_positive_int "$PUID"; then
             PGID="$PUID"
         else
-            echo "Invalid PUID: '$PUID'. Using default: $DEFAULT_PUID"
             PUID="$DEFAULT_PUID"
             PGID="$DEFAULT_PGID"
         fi
-    elif [[ -z "$PUID" && -n "$PGID" ]]; then
+    elif [[ -z "${PUID:-}" && -n "${PGID:-}" ]]; then
         if is_positive_int "$PGID"; then
             PUID="$PGID"
         else
-            echo "Invalid PGID: '$PGID'. Using default: $DEFAULT_PGID"
             PUID="$DEFAULT_PUID"
             PGID="$DEFAULT_PGID"
         fi
     else
         if ! is_positive_int "$PUID"; then
-            echo "Invalid PUID: '$PUID'. Using default: $DEFAULT_PUID"
             PUID="$DEFAULT_PUID"
         fi
-        
         if ! is_positive_int "$PGID"; then
-            echo "Invalid PGID: '$PGID'. Using default: $DEFAULT_PGID"
             PGID="$DEFAULT_PGID"
         fi
     fi
 
-    # Check existing UID/GID conflicts
-    local current_user current_group
-    current_user=$(id -un "$PUID" 2>/dev/null || true)
-    current_group=$(getent group "$PGID" | cut -d: -f1 2>/dev/null || true)
-
-    [[ -n "$current_user" && "$current_user" != "node" ]] &&
-        echo "Warning: UID $PUID already in use by $current_user - may cause permission issues"
-
-    [[ -n "$current_group" && "$current_group" != "node" ]] &&
-        echo "Warning: GID $PGID already in use by $current_group - may cause permission issues"
-
-    # Modify UID/GID if needed - use test command instead of arithmetic expressions
     if [ "$(id -u node)" -ne "$PUID" ]; then
         if usermod -o -u "$PUID" node 2>/dev/null; then
             uid_gid_changed=1
         else
-            echo "Error: Failed to change UID to $PUID. Using existing UID $(id -u node)"
-            PUID=$(id -u node)
+            PUID="$(id -u node)"
         fi
     fi
 
@@ -103,392 +202,404 @@ handle_first_run() {
         if groupmod -o -g "$PGID" node 2>/dev/null; then
             uid_gid_changed=1
         else
-            echo "Error: Failed to change GID to $PGID. Using existing GID $(id -g node)"
-            PGID=$(id -g node)
+            PGID="$(id -g node)"
         fi
     fi
 
-    [ "$uid_gid_changed" -eq 1 ] && echo "Updated UID/GID to PUID=$PUID, PGID=$PGID"
+    if [ "$uid_gid_changed" -eq 1 ]; then
+        echo "Updated UID/GID to PUID=${PUID}, PGID=${PGID}"
+    fi
+
     touch "$FIRST_RUN_FILE"
 }
 
-# Validate and set PORT
-validate_port() {
-    # Ensure PORT has a value
-    PORT=${PORT:-$DEFAULT_PORT}
-    
-    # Check if PORT is a positive integer
-    if ! is_positive_int "$PORT"; then
-        echo "Invalid PORT: '$PORT'. Using default: $DEFAULT_PORT"
-        PORT="$DEFAULT_PORT"
-    elif [ "$PORT" -lt 1 ] || [ "$PORT" -gt 65535 ]; then
-        echo "Invalid PORT: '$PORT'. Using default: $DEFAULT_PORT"
-        PORT="$DEFAULT_PORT"
-    fi
-    
-    # Check if port is privileged - use test command instead of arithmetic expression
-    if [ "$PORT" -lt 1024 ] && [ "$(id -u)" -ne 0 ]; then
-        echo "Warning: Port $PORT is privileged and might require root"
-    fi
-}
-
-# Build MCP server command with environment variables
-build_mcp_server_cmd() {
-    # Start with the base command
-    MCP_SERVER_CMD="npx -y firecrawl-mcp"
-    
-    # Build environment variable arguments array
-    FIRECRAWL_ENV_ARGS=()
-    
-    # Add FIRECRAWL_API_KEY (required)
-    if [[ -n "${FIRECRAWL_API_KEY:-}" ]]; then
-        FIRECRAWL_ENV_ARGS+=(env "FIRECRAWL_API_KEY=$FIRECRAWL_API_KEY")
-    fi
-    
-    # Add FIRECRAWL_API_URL (optional)
-    if [[ -n "${FIRECRAWL_API_URL:-}" ]]; then
-        FIRECRAWL_ENV_ARGS+=(env "FIRECRAWL_API_URL=$FIRECRAWL_API_URL")
-    fi
-    
-    # Add retry configuration (optional)
-    if [[ -n "${FIRECRAWL_RETRY_MAX_ATTEMPTS:-}" ]]; then
-        FIRECRAWL_ENV_ARGS+=(env "FIRECRAWL_RETRY_MAX_ATTEMPTS=$FIRECRAWL_RETRY_MAX_ATTEMPTS")
-    fi
-    
-    if [[ -n "${FIRECRAWL_RETRY_INITIAL_DELAY:-}" ]]; then
-        FIRECRAWL_ENV_ARGS+=(env "FIRECRAWL_RETRY_INITIAL_DELAY=$FIRECRAWL_RETRY_INITIAL_DELAY")
-    fi
-    
-    if [[ -n "${FIRECRAWL_RETRY_MAX_DELAY:-}" ]]; then
-        FIRECRAWL_ENV_ARGS+=(env "FIRECRAWL_RETRY_MAX_DELAY=$FIRECRAWL_RETRY_MAX_DELAY")
-    fi
-    
-    if [[ -n "${FIRECRAWL_RETRY_BACKOFF_FACTOR:-}" ]]; then
-        FIRECRAWL_ENV_ARGS+=(env "FIRECRAWL_RETRY_BACKOFF_FACTOR=$FIRECRAWL_RETRY_BACKOFF_FACTOR")
-    fi
-    
-    # Add credit monitoring (optional)
-    if [[ -n "${FIRECRAWL_CREDIT_WARNING_THRESHOLD:-}" ]]; then
-        FIRECRAWL_ENV_ARGS+=(env "FIRECRAWL_CREDIT_WARNING_THRESHOLD=$FIRECRAWL_CREDIT_WARNING_THRESHOLD")
-    fi
-    
-    if [[ -n "${FIRECRAWL_CREDIT_CRITICAL_THRESHOLD:-}" ]]; then
-        FIRECRAWL_ENV_ARGS+=(env "FIRECRAWL_CREDIT_CRITICAL_THRESHOLD=$FIRECRAWL_CREDIT_CRITICAL_THRESHOLD")
-    fi
-    
-    # Add HTTP_STREAMABLE_SERVER (optional)
-    if [[ -n "${HTTP_STREAMABLE_SERVER:-}" ]]; then
-        FIRECRAWL_ENV_ARGS+=(env "HTTP_STREAMABLE_SERVER=$HTTP_STREAMABLE_SERVER")
-    fi
-    
-    # Combine env args with the base command
-    if [[ ${#FIRECRAWL_ENV_ARGS[@]} -gt 0 ]]; then
-        MCP_SERVER_CMD="${FIRECRAWL_ENV_ARGS[@]} $MCP_SERVER_CMD"
-    fi
-}
-
-# Validate CORS patterns
-validate_cors() {
-    CORS_ARGS=()
-    ALLOW_ALL_CORS=false
-    local cors_value
-
-    if [[ -n "${CORS:-}" ]]; then
-        IFS=',' read -ra CORS_VALUES <<< "$CORS"
-        for cors_value in "${CORS_VALUES[@]}"; do
-            cors_value=$(trim "$cors_value")
-            [[ -z "$cors_value" ]] && continue
-
-            if [[ "$cors_value" =~ ^(all|\*)$ ]]; then
-                ALLOW_ALL_CORS=true
-                CORS_ARGS=(--cors)
-                echo "Caution! CORS allowing all origins - security risk in production!"
-                break
-            elif [[ "$cors_value" =~ ^/.*/$ ]] ||
-                 [[ "$cors_value" =~ ^https?:// ]] ||
-                 [[ "$cors_value" =~ ^[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(:[0-9]+)?$ ]] ||
-                 [[ "$cors_value" =~ ^https?://[0-9]+\.[0-9]+\.[0-9]+\.[0-9]+(:[0-9]+)?$ ]] ||
-                 [[ "$cors_value" =~ ^[a-zA-Z0-9][a-zA-Z0-9.-]+\.[a-zA-Z]{2,}(:[0-9]+)?$ ]]
-            then
-                CORS_ARGS+=(--cors "$cors_value")
-            else
-                echo "Warning: Invalid CORS pattern '$cors_value' - skipping"
-            fi
-        done
-    fi
-}
-
-# Generate client configuration example
-generate_client_config_example() {
-    echo ""
-    echo "=== FIRECRAWL MCP TOOL LIST ==="
-    echo "To enable auto-approval in your MCP client, add this to your configuration:"
-    echo ""
-    echo "\"TOOL LIST\": ["
-    echo "  \"firecrawl_scrape\","
-    echo "  \"firecrawl_batch_scrape\","
-    echo "  \"firecrawl_check_batch_status\","
-    echo "  \"firecrawl_map\","
-    echo "  \"firecrawl_search\","
-    echo "  \"firecrawl_crawl\","
-    echo "  \"firecrawl_check_crawl_status\","
-    echo "  \"firecrawl_extract\""
-    echo "]"
-    echo ""
-    echo "=== END TOOL LIST ==="
-    echo ""
-}
-
-# Validate and set Firecrawl environment variables
-validate_firecrawl_env() {
-    # STRICT VALIDATION: FIRECRAWL_API_KEY is REQUIRED
-    if [[ -z "${FIRECRAWL_API_KEY:-}" ]]; then
-        echo "❌ ERROR: FIRECRAWL_API_KEY environment variable is REQUIRED."
-        echo ""
-        echo "The Firecrawl MCP server cannot start without an API key."
-        echo ""
-        echo "You can obtain an API key by:"
-        echo "  1. Visiting: https://www.firecrawl.dev/app/api-keys"
-        echo "  2. Creating an account if you don't have one"
-        echo "  3. Generating a new API key"
-        echo ""
-        echo "Then set the environment variable:"
-        echo "  docker run -e FIRECRAWL_API_KEY=fc-your-api-key ..."
-        echo ""
-        echo "For self-hosted instances, you still need an API key from your instance."
-        echo ""
+haproxy_supports_quic() {
+    # Build flag check (fast pre-filter)
+    # Note: avoid pipe + grep -q with pipefail (SIGPIPE can cause false negatives)
+    local vv_output
+    vv_output="$(haproxy -vv 2>/dev/null)" || true
+    if ! echo "$vv_output" | grep -Eiq 'USE_QUIC=1|[[:space:]]quic[[:space:]]: mode=HTTP'; then
         return 1
     fi
 
-    # Validate API key format (basic check for Firecrawl format)
-    if [[ ! "$FIRECRAWL_API_KEY" =~ ^fc- ]]; then
-        echo "⚠️  Warning: FIRECRAWL_API_KEY doesn't match expected format (should start with 'fc-')"
-    fi
+    # Runtime probe: verify QUIC bind actually works with the current SSL library
+    local probe_dir probe_cfg probe_pem output
+    probe_dir="$(mktemp -d)" || return 1
+    probe_cfg="${probe_dir}/probe.cfg"
+    probe_pem="${probe_dir}/probe.pem"
 
-    # Validate FIRECRAWL_API_URL if set (optional)
-    if [[ -n "${FIRECRAWL_API_URL:-}" ]]; then
-        if [[ ! "$FIRECRAWL_API_URL" =~ ^https?:// ]]; then
-            echo "❌ ERROR: FIRECRAWL_API_URL must start with http:// or https://"
-            return 1
-        fi
+    if ! openssl req -x509 -newkey rsa:2048 -keyout "${probe_dir}/probe.key" -out "${probe_dir}/probe.crt" \
+         -days 1 -nodes -subj "/CN=quic-probe" -batch 2>/dev/null; then
+        rm -rf "$probe_dir"
+        return 1
     fi
+    cat "${probe_dir}/probe.crt" "${probe_dir}/probe.key" > "$probe_pem"
 
-    # Validate optional retry configuration only if set
-    if [[ -n "${FIRECRAWL_RETRY_MAX_ATTEMPTS:-}" ]]; then
-        if ! is_positive_int "$FIRECRAWL_RETRY_MAX_ATTEMPTS"; then
-            echo "⚠️  Warning: Invalid FIRECRAWL_RETRY_MAX_ATTEMPTS: '$FIRECRAWL_RETRY_MAX_ATTEMPTS'. Using default: $DEFAULT_RETRY_MAX_ATTEMPTS"
-            export FIRECRAWL_RETRY_MAX_ATTEMPTS="$DEFAULT_RETRY_MAX_ATTEMPTS"
-        fi
+    printf 'global\n  log stderr format raw local0\ndefaults\n  mode http\n  timeout connect 5s\n  timeout client 5s\n  timeout server 5s\nfrontend quic_probe\n  bind quic4@*:65535 ssl crt %s alpn h3\n  default_backend quic_probe_be\nbackend quic_probe_be\n  server s1 127.0.0.1:1\n' \
+        "$probe_pem" > "$probe_cfg"
+
+    output="$(haproxy -c -f "$probe_cfg" 2>&1)" || true
+    rm -rf "$probe_dir"
+
+    if echo "$output" | grep -qi 'does not support the QUIC protocol'; then
+        return 1
     fi
-
-    if [[ -n "${FIRECRAWL_RETRY_INITIAL_DELAY:-}" ]]; then
-        if ! is_positive_int "$FIRECRAWL_RETRY_INITIAL_DELAY"; then
-            echo "⚠️  Warning: Invalid FIRECRAWL_RETRY_INITIAL_DELAY: '$FIRECRAWL_RETRY_INITIAL_DELAY'. Using default: $DEFAULT_RETRY_INITIAL_DELAY"
-            export FIRECRAWL_RETRY_INITIAL_DELAY="$DEFAULT_RETRY_INITIAL_DELAY"
-        fi
-    fi
-
-    if [[ -n "${FIRECRAWL_RETRY_MAX_DELAY:-}" ]]; then
-        if ! is_positive_int "$FIRECRAWL_RETRY_MAX_DELAY"; then
-            echo "⚠️  Warning: Invalid FIRECRAWL_RETRY_MAX_DELAY: '$FIRECRAWL_RETRY_MAX_DELAY'. Using default: $DEFAULT_RETRY_MAX_DELAY"
-            export FIRECRAWL_RETRY_MAX_DELAY="$DEFAULT_RETRY_MAX_DELAY"
-        fi
-    fi
-
-    if [[ -n "${FIRECRAWL_RETRY_BACKOFF_FACTOR:-}" ]]; then
-        if ! is_positive_float "$FIRECRAWL_RETRY_BACKOFF_FACTOR"; then
-            echo "⚠️  Warning: Invalid FIRECRAWL_RETRY_BACKOFF_FACTOR: '$FIRECRAWL_RETRY_BACKOFF_FACTOR'. Using default: $DEFAULT_RETRY_BACKOFF_FACTOR"
-            export FIRECRAWL_RETRY_BACKOFF_FACTOR="$DEFAULT_RETRY_BACKOFF_FACTOR"
-        fi
-    fi
-
-    # Validate optional credit monitoring only if set
-    if [[ -n "${FIRECRAWL_CREDIT_WARNING_THRESHOLD:-}" ]]; then
-        if ! is_positive_int "$FIRECRAWL_CREDIT_WARNING_THRESHOLD"; then
-            echo "⚠️  Warning: Invalid FIRECRAWL_CREDIT_WARNING_THRESHOLD: '$FIRECRAWL_CREDIT_WARNING_THRESHOLD'. Using default: $DEFAULT_CREDIT_WARNING_THRESHOLD"
-            export FIRECRAWL_CREDIT_WARNING_THRESHOLD="$DEFAULT_CREDIT_WARNING_THRESHOLD"
-        fi
-    fi
-
-    if [[ -n "${FIRECRAWL_CREDIT_CRITICAL_THRESHOLD:-}" ]]; then
-        if ! is_positive_int "$FIRECRAWL_CREDIT_CRITICAL_THRESHOLD"; then
-            echo "⚠️  Warning: Invalid FIRECRAWL_CREDIT_CRITICAL_THRESHOLD: '$FIRECRAWL_CREDIT_CRITICAL_THRESHOLD'. Using default: $DEFAULT_CREDIT_CRITICAL_THRESHOLD"
-            export FIRECRAWL_CREDIT_CRITICAL_THRESHOLD="$DEFAULT_CREDIT_CRITICAL_THRESHOLD"
-        fi
-    fi
-
     return 0
 }
 
-# Display Firecrawl configuration summary (only show set optional variables)
-display_config_summary() {
-    echo ""
-    echo "=== FIRECRAWL MCP SERVER CONFIGURATION ==="
-    
-    # Always show API configuration
-    echo "🔑 API Key: ${FIRECRAWL_API_KEY:0:8}...${FIRECRAWL_API_KEY: -4} (length: ${#FIRECRAWL_API_KEY})"
-    
-    if [[ -n "${FIRECRAWL_API_URL:-}" ]]; then
-        echo "🏠 API URL: $FIRECRAWL_API_URL"
-    fi
-    
-    # Only show retry settings if any were customized
-    local show_retry_settings=false
-    if [[ "${FIRECRAWL_RETRY_MAX_ATTEMPTS:-}" != "$DEFAULT_RETRY_MAX_ATTEMPTS" ]] ||
-       [[ "${FIRECRAWL_RETRY_INITIAL_DELAY:-}" != "$DEFAULT_RETRY_INITIAL_DELAY" ]] ||
-       [[ "${FIRECRAWL_RETRY_MAX_DELAY:-}" != "$DEFAULT_RETRY_MAX_DELAY" ]] ||
-       [[ "${FIRECRAWL_RETRY_BACKOFF_FACTOR:-}" != "$DEFAULT_RETRY_BACKOFF_FACTOR" ]]; then
-        show_retry_settings=true
-    fi
-    
-    if [[ "$show_retry_settings" == true ]]; then
-        echo "🔄 Retry Settings:"
-        [[ "${FIRECRAWL_RETRY_MAX_ATTEMPTS:-}" != "$DEFAULT_RETRY_MAX_ATTEMPTS" ]] && echo "   - Max Attempts: $FIRECRAWL_RETRY_MAX_ATTEMPTS"
-        [[ "${FIRECRAWL_RETRY_INITIAL_DELAY:-}" != "$DEFAULT_RETRY_INITIAL_DELAY" ]] && echo "   - Initial Delay: $FIRECRAWL_RETRY_INITIAL_DELAY ms"
-        [[ "${FIRECRAWL_RETRY_MAX_DELAY:-}" != "$DEFAULT_RETRY_MAX_DELAY" ]] && echo "   - Max Delay: $FIRECRAWL_RETRY_MAX_DELAY ms"
-        [[ "${FIRECRAWL_RETRY_BACKOFF_FACTOR:-}" != "$DEFAULT_RETRY_BACKOFF_FACTOR" ]] && echo "   - Backoff Factor: $FIRECRAWL_RETRY_BACKOFF_FACTOR"
-    fi
-    
-    # Only show credit monitoring if customized
-    if [[ "${FIRECRAWL_CREDIT_WARNING_THRESHOLD:-}" != "$DEFAULT_CREDIT_WARNING_THRESHOLD" ]] ||
-       [[ "${FIRECRAWL_CREDIT_CRITICAL_THRESHOLD:-}" != "$DEFAULT_CREDIT_CRITICAL_THRESHOLD" ]]; then
-        echo "💰 Credit Monitoring:"
-        [[ "${FIRECRAWL_CREDIT_WARNING_THRESHOLD:-}" != "$DEFAULT_CREDIT_WARNING_THRESHOLD" ]] && echo "   - Warning Threshold: $FIRECRAWL_CREDIT_WARNING_THRESHOLD credits"
-        [[ "${FIRECRAWL_CREDIT_CRITICAL_THRESHOLD:-}" != "$DEFAULT_CREDIT_CRITICAL_THRESHOLD" ]] && echo "   - Critical Threshold: $FIRECRAWL_CREDIT_CRITICAL_THRESHOLD credits"
-    fi
-    
-    # Show HTTP mode if enabled
-    if [[ "${HTTP_STREAMABLE_SERVER:-}" == "true" ]]; then
-        echo "🌐 HTTP Streamable Server mode enabled"
-        echo "   Access at: http://localhost:${PORT}/mcp"
-    fi
-    
-    # Always show server configuration
-    echo "📡 Server:"
-    echo "   - Port: $PORT"
-    echo "   - Protocol: $PROTOCOL_DISPLAY"
-    
-    echo "=========================================="
-    echo ""
+ensure_parent_dir() {
+    local target="$1"
+    mkdir -p "$(dirname "$target")"
 }
 
-# Main execution
-main() {
-    # Trim all input parameters
-    [[ -n "${PUID:-}" ]] && PUID=$(trim "$PUID")
-    [[ -n "${PGID:-}" ]] && PGID=$(trim "$PGID")
-    [[ -n "${PORT:-}" ]] && PORT=$(trim "$PORT")
-    [[ -n "${PROTOCOL:-}" ]] && PROTOCOL=$(trim "$PROTOCOL")
-    [[ -n "${CORS:-}" ]] && CORS=$(trim "$CORS")
-    
-    # Trim Firecrawl specific environment variables
-    [[ -n "${FIRECRAWL_API_KEY:-}" ]] && FIRECRAWL_API_KEY=$(trim "$FIRECRAWL_API_KEY")
-    [[ -n "${FIRECRAWL_API_URL:-}" ]] && FIRECRAWL_API_URL=$(trim "$FIRECRAWL_API_URL")
-    [[ -n "${FIRECRAWL_RETRY_MAX_ATTEMPTS:-}" ]] && FIRECRAWL_RETRY_MAX_ATTEMPTS=$(trim "$FIRECRAWL_RETRY_MAX_ATTEMPTS")
-    [[ -n "${FIRECRAWL_RETRY_INITIAL_DELAY:-}" ]] && FIRECRAWL_RETRY_INITIAL_DELAY=$(trim "$FIRECRAWL_RETRY_INITIAL_DELAY")
-    [[ -n "${FIRECRAWL_RETRY_MAX_DELAY:-}" ]] && FIRECRAWL_RETRY_MAX_DELAY=$(trim "$FIRECRAWL_RETRY_MAX_DELAY")
-    [[ -n "${FIRECRAWL_RETRY_BACKOFF_FACTOR:-}" ]] && FIRECRAWL_RETRY_BACKOFF_FACTOR=$(trim "$FIRECRAWL_RETRY_BACKOFF_FACTOR")
-    [[ -n "${FIRECRAWL_CREDIT_WARNING_THRESHOLD:-}" ]] && FIRECRAWL_CREDIT_WARNING_THRESHOLD=$(trim "$FIRECRAWL_CREDIT_WARNING_THRESHOLD")
-    [[ -n "${FIRECRAWL_CREDIT_CRITICAL_THRESHOLD:-}" ]] && FIRECRAWL_CREDIT_CRITICAL_THRESHOLD=$(trim "$FIRECRAWL_CREDIT_CRITICAL_THRESHOLD")
-    [[ -n "${HTTP_STREAMABLE_SERVER:-}" ]] && HTTP_STREAMABLE_SERVER=$(trim "$HTTP_STREAMABLE_SERVER")
+prepare_tls_pem() {
+    local cert_path="$1"
+    local key_path="$2"
+    local pem_path="$3"
+    local tls_days="$4"
+    local tls_cn="$5"
+    local tls_san="$6"
 
-    # First run handling
+    if [[ -f "$pem_path" ]]; then
+        return
+    fi
+
+    ensure_parent_dir "$pem_path"
+
+    if [[ -f "$cert_path" && -f "$key_path" ]]; then
+        cat "$cert_path" "$key_path" > "$pem_path"
+        chmod 600 "$pem_path"
+        return
+    fi
+
+    echo "TLS enabled and no certificate material found; generating self-signed certificate (CN=${tls_cn})"
+    ensure_parent_dir "$cert_path"
+    ensure_parent_dir "$key_path"
+
+    openssl req -x509 -newkey rsa:2048 -nodes \
+      -keyout "$key_path" \
+      -out "$cert_path" \
+      -days "$tls_days" \
+      -subj "/CN=${tls_cn}" \
+      -addext "subjectAltName=${tls_san}" >/dev/null 2>&1
+
+    chmod 600 "$cert_path" "$key_path"
+    cat "$cert_path" "$key_path" > "$pem_path"
+    chmod 600 "$pem_path"
+}
+
+resolve_listener_protocols() {
+    local mode="$1"
+
+    if ! is_true "$ENABLE_HTTPS"; then
+        if [[ "$mode" != "h1" && "$mode" != "auto" ]]; then
+            echo "HTTP_VERSION_MODE='${mode}' requested without TLS; falling back to HTTP/1.1" >&2
+        fi
+
+        BIND_PARAMS=""
+        QUIC_BIND_LINE="# HTTP/3 disabled"
+        EFFECTIVE_HTTP_VERSIONS="h1"
+        return
+    fi
+
+    local alpn="http/1.1"
+    local want_h3="false"
+
+    case "$mode" in
+        h1)
+            alpn="http/1.1"
+            ;;
+        h2)
+            alpn="h2"
+            ;;
+        h1+h2)
+            alpn="h2,http/1.1"
+            ;;
+        h3)
+            alpn="h2,http/1.1"
+            want_h3="true"
+            ;;
+        auto|all)
+            alpn="h2,http/1.1"
+            want_h3="true"
+            ;;
+    esac
+
+    BIND_PARAMS="ssl crt ${TLS_PEM_PATH} ssl-min-ver ${TLS_MIN_VERSION} alpn ${alpn}"
+    EFFECTIVE_HTTP_VERSIONS="${alpn}"
+    QUIC_BIND_LINE="# HTTP/3 disabled"
+
+    if [[ "$want_h3" == "true" ]]; then
+        if haproxy_supports_quic; then
+            QUIC_BIND_LINE="bind quic4@*:${PORT} ssl crt ${TLS_PEM_PATH} ssl-min-ver ${TLS_MIN_VERSION} alpn h3"
+            EFFECTIVE_HTTP_VERSIONS="${EFFECTIVE_HTTP_VERSIONS},h3"
+        else
+            echo "HTTP_VERSION_MODE='${mode}' requested h3, but QUIC is not available in this HAProxy build; continuing with ${alpn}" >&2
+        fi
+    fi
+}
+
+escape_sed_replacement() {
+    local value="$1"
+    value="${value//\\/\\\\}"
+    value="${value//&/\\&}"
+    value="${value//|/\\|}"
+    printf '%s' "$value"
+}
+
+escape_haproxy_regex() {
+    local value="$1"
+    local escaped=""
+    local i ch
+
+    for ((i = 0; i < ${#value}; i++)); do
+        ch="${value:i:1}"
+        if [[ "$ch" =~ [\\.^$\|?*+(){}\[\]] ]]; then
+            escaped+="\\$ch"
+        else
+            escaped+="$ch"
+        fi
+    done
+
+    printf '%s' "$escaped"
+}
+
+generate_haproxy_config() {
+    if [[ ! -f "$HAPROXY_TEMPLATE" ]]; then
+        echo "Error: HAProxy template missing at ${HAPROXY_TEMPLATE}" >&2
+        exit 1
+    fi
+
+    local api_key_check
+    if [[ -n "$API_KEY" ]]; then
+        local escaped_key_sed
+        escaped_key_sed="$(escape_sed_replacement "$API_KEY")"
+        api_key_check="    # API Key authentication enabled (localhost /healthz excluded)
+    acl auth_header_present var(txn.auth_header) -m found
+
+    # Extract token: strip 'Bearer ' prefix (case-insensitive) into txn.api_token
+    http-request set-var(txn.api_token) var(txn.auth_header),regsub(^[Bb][Ee][Aa][Rr][Ee][Rr][[:space:]]+,)
+
+    # Validate extracted token via exact string match (no regex escaping issues)
+    acl auth_valid var(txn.api_token) -m str ${escaped_key_sed}
+
+    # Deny requests without valid authentication (except localhost health checks)
+    http-request deny deny_status 401 content-type \"application/json\" string '{\"error\":\"Unauthorized\",\"message\":\"Valid API key required\"}' if !is_health_check !auth_header_present
+    http-request deny deny_status 401 content-type \"application/json\" string '{\"error\":\"Unauthorized\",\"message\":\"Valid API key required\"}' if is_health_check !is_localhost !auth_header_present
+    http-request deny deny_status 403 content-type \"application/json\" string '{\"error\":\"Forbidden\",\"message\":\"Invalid API key\"}' if !is_health_check auth_header_present !auth_valid
+    http-request deny deny_status 403 content-type \"application/json\" string '{\"error\":\"Forbidden\",\"message\":\"Invalid API key\"}' if is_health_check !is_localhost auth_header_present !auth_valid"
+    else
+        api_key_check="    # API Key authentication disabled - all requests allowed"
+    fi
+
+    local cors_check
+    local cors_preflight_condition
+    local cors_response_condition
+
+    if [[ "$HAPROXY_CORS_ENABLED" == "true" ]]; then
+        if [[ "$ALLOW_ALL_CORS" == "true" ]]; then
+            cors_check="    # CORS enabled - allowing ALL origins"
+            cors_preflight_condition="{ var(txn.origin) -m found }"
+            cors_response_condition="{ var(txn.origin) -m found }"
+        else
+            cors_check="    # CORS enabled - allowing specific origins
+    acl cors_origin_allowed var(txn.origin) -m str -i"
+
+            local origin
+            for origin in "${HAPROXY_CORS_ORIGINS[@]}"; do
+                cors_check+=" ${origin}"
+            done
+
+            cors_check+="
+
+    # Deny requests from non-allowed origins
+    http-request deny deny_status 403 content-type \"application/json\" string '{\"error\":\"Forbidden\",\"message\":\"Origin not allowed\"}' if { var(txn.origin) -m found } !cors_origin_allowed"
+            cors_preflight_condition="cors_origin_allowed"
+            cors_response_condition="cors_origin_allowed"
+        fi
+    else
+        cors_check="    # CORS disabled"
+        cors_preflight_condition="{ always_false }"
+        cors_response_condition="{ always_false }"
+    fi
+
+    local escaped_bind_params
+    local escaped_quic_bind_line
+    escaped_bind_params="$(escape_sed_replacement "$BIND_PARAMS")"
+    escaped_quic_bind_line="$(escape_sed_replacement "$QUIC_BIND_LINE")"
+
+    sed -e "s|__SERVER_PORT__|${PORT}|g" \
+        -e "s|__BIND_PARAMS__|${escaped_bind_params}|g" \
+        -e "s|__QUIC_BIND_LINE__|${escaped_quic_bind_line}|g" \
+        -e "s|__INTERNAL_PORT__|${INTERNAL_PORT}|g" \
+        -e "s|__SERVER_NAME__|${HAPROXY_SERVER_NAME}|g" \
+        -e "s|__CORS_PREFLIGHT_CONDITION__|${cors_preflight_condition}|g" \
+        -e "s|__CORS_RESPONSE_CONDITION__|${cors_response_condition}|g" \
+        "$HAPROXY_TEMPLATE" > "${HAPROXY_CONFIG}.tmp"
+
+    awk -v replacement="$api_key_check" -v replacement_cors="$cors_check" '
+        /__API_KEY_CHECK__/ {
+            print replacement
+            next
+        }
+        /__CORS_CHECK__/ {
+            print replacement_cors
+            next
+        }
+        { print }
+    ' "${HAPROXY_CONFIG}.tmp" > "$HAPROXY_CONFIG"
+
+    rm -f "${HAPROXY_CONFIG}.tmp"
+
+    haproxy -c -f "$HAPROXY_CONFIG" >/dev/null
+}
+
+start_haproxy() {
+    echo "Starting HAProxy on port ${PORT}"
+    haproxy -db -f "$HAPROXY_CONFIG" &
+    HAPROXY_PID=$!
+}
+
+start_mcp_server() {
+    local mcp_server_cmd="npx -y firecrawl-mcp"
+
+    case "${PROTOCOL^^}" in
+        SHTTP|STREAMABLEHTTP)
+            CMD_ARGS=(npx --yes supergateway --port "$INTERNAL_PORT" --streamableHttpPath /mcp --outputTransport streamableHttp --healthEndpoint /healthz --stdio "$mcp_server_cmd")
+            PROTOCOL_DISPLAY="SHTTP/streamableHttp"
+            ;;
+        SSE)
+            CMD_ARGS=(npx --yes supergateway --port "$INTERNAL_PORT" --ssePath /sse --outputTransport sse --healthEndpoint /healthz --stdio "$mcp_server_cmd")
+            PROTOCOL_DISPLAY="SSE/Server-Sent Events"
+            ;;
+        WS|WEBSOCKET)
+            CMD_ARGS=(npx --yes supergateway --port "$INTERNAL_PORT" --messagePath /message --outputTransport ws --healthEndpoint /healthz --stdio "$mcp_server_cmd")
+            PROTOCOL_DISPLAY="WS/WebSocket"
+            ;;
+        *)
+            echo "Invalid PROTOCOL='${PROTOCOL}', using default ${DEFAULT_PROTOCOL}"
+            CMD_ARGS=(npx --yes supergateway --port "$INTERNAL_PORT" --streamableHttpPath /mcp --outputTransport streamableHttp --healthEndpoint /healthz --stdio "$mcp_server_cmd")
+            PROTOCOL_DISPLAY="SHTTP/streamableHttp"
+            ;;
+    esac
+
+    echo "Launching Firecrawl MCP with protocol: ${PROTOCOL_DISPLAY}"
+
+    if [ "$(id -u)" -eq 0 ]; then
+        su-exec node "${CMD_ARGS[@]}" &
+    else
+        "${CMD_ARGS[@]}" &
+    fi
+
+    MCP_PID=$!
+
+    local i=0
+    until nc -z 127.0.0.1 "$INTERNAL_PORT" >/dev/null 2>&1; do
+        if ! kill -0 "$MCP_PID" >/dev/null 2>&1; then
+            echo "MCP server exited before becoming ready" >&2
+            return 1
+        fi
+
+        i=$((i + 1))
+        if [ "$i" -ge 30 ]; then
+            echo "MCP server did not become ready on ${INTERNAL_PORT}" >&2
+            return 1
+        fi
+
+        sleep 1
+    done
+}
+
+shutdown() {
+    set +e
+    if [[ -n "${HAPROXY_PID:-}" ]]; then
+        kill "$HAPROXY_PID" 2>/dev/null || true
+    fi
+    if [[ -n "${MCP_PID:-}" ]]; then
+        kill "$MCP_PID" 2>/dev/null || true
+    fi
+    wait 2>/dev/null || true
+}
+
+main() {
+    if [[ $# -gt 0 ]]; then
+        exec "$@"
+    fi
+
+    PUID="${PUID:-$DEFAULT_PUID}"
+    PGID="${PGID:-$DEFAULT_PGID}"
+    PUID="$(trim "$PUID")"
+    PGID="$(trim "$PGID")"
+
+    PORT="${PORT:-$DEFAULT_PORT}"
+    INTERNAL_PORT="${INTERNAL_PORT:-$DEFAULT_INTERNAL_PORT}"
+    PROTOCOL="${PROTOCOL:-$DEFAULT_PROTOCOL}"
+    ENABLE_HTTPS="${ENABLE_HTTPS:-false}"
+    TLS_CERT_PATH="${TLS_CERT_PATH:-/etc/haproxy/certs/server.crt}"
+    TLS_KEY_PATH="${TLS_KEY_PATH:-/etc/haproxy/certs/server.key}"
+    TLS_PEM_PATH="${TLS_PEM_PATH:-/etc/haproxy/certs/server.pem}"
+    TLS_CN="${TLS_CN:-$DEFAULT_TLS_CN}"
+    TLS_SAN="${TLS_SAN:-DNS:${TLS_CN}}"
+    TLS_DAYS="${TLS_DAYS:-$DEFAULT_TLS_DAYS}"
+    TLS_MIN_VERSION="${TLS_MIN_VERSION:-$DEFAULT_TLS_MIN_VERSION}"
+    HTTP_VERSION_MODE="${HTTP_VERSION_MODE:-$DEFAULT_HTTP_VERSION_MODE}"
+    CORS="${CORS:-}"
+
+    PORT="$(validate_port "PORT" "$PORT" "$DEFAULT_PORT")"
+    INTERNAL_PORT="$(validate_port "INTERNAL_PORT" "$INTERNAL_PORT" "$DEFAULT_INTERNAL_PORT")"
+    TLS_DAYS="$(validate_tls_days "$TLS_DAYS" "$DEFAULT_TLS_DAYS")"
+    TLS_MIN_VERSION="$(validate_tls_min_version "$TLS_MIN_VERSION" "$DEFAULT_TLS_MIN_VERSION")"
+    HTTP_VERSION_MODE="$(normalize_http_version_mode "$HTTP_VERSION_MODE")"
+
+    validate_api_key
+    validate_cors
+
     if [[ ! -f "$FIRST_RUN_FILE" ]]; then
         handle_first_run
     fi
 
-    # Validate configurations
-    validate_port
-    validate_cors
-    
-    # Validate Firecrawl environment - this will exit if configuration is invalid
-    if ! validate_firecrawl_env; then
-        echo "❌ Firecrawl MCP Server cannot start due to configuration errors."
-        exit 1
+    # Export variables for banner.sh (runs as child process)
+    export PORT PUID PGID PROTOCOL
+    /usr/local/bin/banner.sh
+
+    if is_true "$ENABLE_HTTPS"; then
+        prepare_tls_pem "$TLS_CERT_PATH" "$TLS_KEY_PATH" "$TLS_PEM_PATH" "$TLS_DAYS" "$TLS_CN" "$TLS_SAN"
     fi
 
-    # Build MCP server command with environment variables
-    build_mcp_server_cmd
+    resolve_listener_protocols "$HTTP_VERSION_MODE"
+    generate_haproxy_config
 
-    # Generate client configuration example if auto-approve is enabled
-    generate_client_config_example
+    trap shutdown INT TERM EXIT
 
-    # Protocol selection
-    local PROTOCOL_UPPER=${PROTOCOL:-$DEFAULT_PROTOCOL}
-    PROTOCOL_UPPER=${PROTOCOL_UPPER^^}
+    start_mcp_server
+    start_haproxy
 
-    case "$PROTOCOL_UPPER" in
-        "SHTTP"|"STREAMABLEHTTP")
-            CMD_ARGS=(npx --yes supergateway --port "$PORT" --streamableHttpPath /mcp --outputTransport streamableHttp "${CORS_ARGS[@]}" --healthEndpoint /healthz --stdio "$MCP_SERVER_CMD")
-            PROTOCOL_DISPLAY="SHTTP/streamableHttp"
-            ;;
-        "SSE")
-            CMD_ARGS=(npx --yes supergateway --port "$PORT" --ssePath /sse --outputTransport sse "${CORS_ARGS[@]}" --healthEndpoint /healthz --stdio "$MCP_SERVER_CMD")
-            PROTOCOL_DISPLAY="SSE/Server-Sent Events"
-            ;;
-        "WS"|"WEBSOCKET")
-            CMD_ARGS=(npx --yes supergateway --port "$PORT" --messagePath /message --outputTransport ws "${CORS_ARGS[@]}" --healthEndpoint /healthz --stdio "$MCP_SERVER_CMD")
-            PROTOCOL_DISPLAY="WS/WebSocket"
-            ;;
-        *)
-            echo "Invalid PROTOCOL: '$PROTOCOL'. Using default: $DEFAULT_PROTOCOL"
-            CMD_ARGS=(npx --yes supergateway --port "$PORT" --streamableHttpPath /mcp --outputTransport streamableHttp "${CORS_ARGS[@]}" --healthEndpoint /healthz --stdio "$MCP_SERVER_CMD")
-            PROTOCOL_DISPLAY="SHTTP/streamableHttp"
-            ;;
-    esac
+    if [[ -n "$API_KEY" ]]; then
+        echo "API key authentication enabled"
+    else
+        echo "API key authentication disabled"
+    fi
 
-    # Display configuration summary
-    display_config_summary
+    if is_true "$ENABLE_HTTPS"; then
+        echo "HTTPS enabled on port ${PORT}"
+        echo "HTTP versions enabled: ${EFFECTIVE_HTTP_VERSIONS}"
+    else
+        echo "HTTPS disabled; listening on HTTP port ${PORT}"
+        echo "WARNING: Traffic is NOT encrypted when ENABLE_HTTPS=false." >&2
+        echo "WARNING: Use ENABLE_HTTPS=true for internet-facing or untrusted networks." >&2
+        if [[ "${NODE_ENV:-}" =~ ^([Pp][Rr][Oo][Dd][Uu][Cc][Tt][Ii][Oo][Nn])$ ]]; then
+            echo "====================================================================" >&2
+            echo "SECURITY WARNING: NODE_ENV=production with ENABLE_HTTPS=false" >&2
+            echo "SECURITY WARNING: Requests and responses are plaintext over the network." >&2
+            echo "SECURITY WARNING: Enable TLS now by setting ENABLE_HTTPS=true." >&2
+            echo "====================================================================" >&2
+        fi
+        if [[ -n "$API_KEY" ]]; then
+            echo "WARNING: API_KEY protects access but does not encrypt HTTP traffic." >&2
+        fi
+    fi
 
-    # Debug mode handling
-    case "${DEBUG_MODE:-}" in
-        [1YyTt]*|[Oo][Nn]|[Yy][Ee][Ss]|[Ee][Nn][Aa][Bb][Ll][Ee]*)
-            echo "DEBUG MODE: Installing nano and pausing container"
-            apk add --no-cache nano 2>/dev/null || echo "Warning: Failed to install nano"
-            echo "Container paused for debugging. Exec into container to investigate."
-            exec tail -f /dev/null
-            ;;
-        *)
-            # Normal execution
-            echo "🚀 Launching Firecrawl MCP Server with protocol: $PROTOCOL_DISPLAY on port: $PORT"
-            
-            # Check for npx availability
-            if ! command -v npx &>/dev/null; then
-                echo "❌ Error: npx not available. Cannot start server."
-                exit 1
-            fi
-
-            # Final check - ensure API key is set (should already be validated, but double-check)
-            if [[ -z "${FIRECRAWL_API_KEY:-}" ]]; then
-                echo "❌ CRITICAL: FIRECRAWL_API_KEY is not set."
-                echo "   The server cannot start without a Firecrawl API key."
-                exit 1
-            fi
-
-            # Display the actual command being executed for debugging
-            if [[ "${DEBUG_MODE:-}" == "verbose" ]]; then
-                echo "🔧 DEBUG - Final command: ${CMD_ARGS[*]}"
-            fi
-
-            if [ "$(id -u)" -eq 0 ]; then
-                echo "👤 Running as user: node (PUID: $PUID, PGID: $PGID)"
-                exec su-exec node "${CMD_ARGS[@]}"
-            else
-                if [ "$PORT" -lt 1024 ]; then
-                    echo "❌ Error: Cannot bind to privileged port $PORT without root"
-                    exit 1
-                fi
-                echo "👤 Running as current user"
-                exec "${CMD_ARGS[@]}"
-            fi
-            ;;
-    esac
+    wait -n "$MCP_PID" "$HAPROXY_PID"
 }
 
-# Run the script with error handling
-if main "$@"; then
-    exit 0
-else
-    echo "❌ Firecrawl MCP Server failed to start"
-    exit 1
-fi
+main "$@"
