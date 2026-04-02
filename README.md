@@ -16,18 +16,6 @@
 
 ### Multi-Architecture Docker Image for Web Scraping & Crawling
 
-<div align="left">
-
-<img alt="firecrawl-mcp" src="https://img.shields.io/badge/Firecrawl-MCP-00E9A3?style=for-the-badge&logo=data:image/svg+xml;base64,PHN2ZyB3aWR0aD0iMjQiIGhlaWdodD0iMjQiIHZpZXdCb3g9IjAgMCAyNCAyNCIgZmlsbD0ibm9uZSIgeG1sbnM9Imh0dHA6Ly93d3cudzMub3JnLzIwMDAvc3ZnIj4KPHBhdGggZD0iTTEyIDJMMiA3TDEyIDEyTDIyIDdMMTIgMloiIGZpbGw9IndoaXRlIi8+CjxwYXRoIGQ9Ik0yIDEyTDEyIDE3TDIyIDEyIiBzdHJva2U9IndoaXRlIiBzdHJva2Utd2lkdGg9IjIiIHN0cm9rZS1saW5lY2FwPSJyb3VuZCIgc3Ryb2tlLWxpbmVqb2luPSJyb3VuZCIvPgo8cGF0aCBkPSJNMiAxN0wxMiAyMkwyMiAxNyIgc3Ryb2tlPSJ3aGl0ZSIgc3Ryb2tlLXdpZHRoPSIyIiBzdHJva2UtbGluZWNhcD0icm91bmQiIHN0cm9rZS1saW5lam9pbj0icm91bmQiLz4KPC9zdmc+&logoColor=white" width="400">
-
-[![Docker Pulls](https://img.shields.io/docker/pulls/mekayelanik/firecrawl-mcp.svg?style=flat-square)](https://hub.docker.com/r/mekayelanik/firecrawl-mcp)
-[![Docker Stars](https://img.shields.io/docker/stars/mekayelanik/firecrawl-mcp.svg?style=flat-square)](https://hub.docker.com/r/mekayelanik/firecrawl-mcp)
-[![License](https://img.shields.io/badge/license-GPL-blue.svg?style=flat-square)](https://raw.githubusercontent.com/MekayelAnik/firecrawl-mcp-docker/refs/heads/main/LICENSE)
-
-**[Official Website](https://firecrawl.dev/)** • **[Documentation](https://github.com/nicholasgriffintn/firecrawl-mcp)** • **[Docker Hub](https://hub.docker.com/r/mekayelanik/firecrawl-mcp)**
-
-</div>
-
 ---
 
 ## 📋 Table of Contents
