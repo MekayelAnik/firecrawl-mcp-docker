@@ -76,7 +76,7 @@ Firecrawl MCP Server provides web scraping and crawling capabilities through the
 |:----|:---------:|:------------|:---------|
 | `stable` | ⭐⭐⭐ | Most stable release | **Recommended for production** |
 | `latest` | ⭐⭐⭐ | Latest stable release | Stay current with stable features |
-| `3.11.0` | ⭐⭐⭐ | Specific version | Version pinning for consistency |
+| `3.14.1` | ⭐⭐⭐ | Specific version | Version pinning for consistency |
 | `beta` | ⚠️ | Beta releases | **Testing only** |
 
 ### System Requirements
